@@ -1,13 +1,33 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine. See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
-# Use a package of configuration called an orb.
 orbs:
-  # Declare a dependency on the welcome-orb
-  welcome: circleci/welcome-orb@0.4.1
-# Orchestrate or schedule a set of jobs
+  sfdx: circleci/salesforce-sfdx@1.0.0
+jobs:
+  deploy_to_scratch_org:
+    executor: sfdx/default
+    steps:
+      - checkout
+      - sfdx/install
+      - sfdx/auth:
+          defaultusername: teresa.allen@brave-shark-3ic31k.com
+      - run:
+          name: Create a scratch org
+          command: sfdx force:org:create -f config/project-scratch-def.json -a autobuild
+      - run:
+          name: Push source to scratch org
+          command: sfdx force:source:push -u autobuild
+      - run:
+          name: Run Apex Tests
+          command: |
+            mkdir -p ~/junit
+            sfdx force:apex:test:run -u autobuild --codecoverage --outputdir ~/junit --resultformat junit --wait 5
+      - store_test_results:
+          path: ~/junit
+      - run:
+          name: Delete Scratch Org
+          command: |
+            sfdx force:org:delete -u autobuild -p
+          when: always
 workflows:
-  # Name the workflow "welcome"
-  welcome:
-    # Run the welcome/run job in its own container
+  basic_test:
     jobs:
-      - welcome/run
+      - deploy_to_scratch_org
